@@ -1,0 +1,7 @@
+; $Id$
+name = Qty field in cart readonly
+description = Make quantity field (Qty) in cart readonly.
+core = 7.x
+version = 7.x-3.8+4-dev
+package = Ubercart - extra
+dependencies[] = uc_cart

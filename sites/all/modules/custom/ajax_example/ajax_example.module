@@ -1,0 +1,79 @@
+<?php 
+/**
+ * Implements hook_menu().
+ */
+function ajax_example_menu() {
+ 
+  // Ajax Callback. Returns telephone number for current region.
+  $items['ajax/credit/%'] = array(
+    'title' => 'Get Current User Name',
+	'page arguments' => array(2),
+    'page callback' => 'ajax_example_get_username',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+ 
+  return $items;
+}
+
+/**
+ * AJAX function that returns the current logged in users name.
+ */
+function ajax_example_get_username($id) {
+global $user;
+
+$other_database  = array(
+			  'database' => 'pronoor_email',
+			  'username' => 'pronoor_email', // assuming this is necessary
+			  'password' => 'Pronoremail@10', // assuming this is necessary
+			  'host' => 'localhost', // assumes localhost
+			  'port' => '3306', // assumes localhost
+			  'driver' => 'mysql', // replace with your database driver
+		  );
+
+Database::addConnectionInfo('mail', 'default', $other_database );
+db_set_active('mail');
+$mail_data = db_select('user', 'n')
+				->fields('n')
+				->condition('email', $user->mail, '=')
+				->execute()
+				->fetchAssoc();
+ $credit_data = db_select('credit_cards', 'n')
+        ->fields('n')
+        ->condition('id',  $id, '=')
+        ->execute()
+        ->fetchAssoc();
+		db_set_active();
+		
+	//$info[]=array('card_holder'=>($credit_data['card_holder']));
+	if($mail_data['id']==$credit_data['user_id']):
+	
+	$exp_date=responsive_bartik_get_descrypt($credit_data['exp_month']).'/'.responsive_bartik_get_descrypt($credit_data['exp_year']);
+	$phone1='';
+	$phone2='';
+	$phone3='';
+	$phone4='';
+	$phone=explode('-',$credit_data['phone_number']);
+	
+	if(isset($phone[0])):
+		$phone1=$phone[0];
+	endif;
+	
+	if(isset($phone[1])):
+		$phone2=$phone[1];
+	endif;
+	
+	if(isset($phone[2])):
+		$phone3=$phone[2];
+	endif;
+	
+	if(isset($phone[3])):
+		$phone4=$phone[3];
+	endif;
+  drupal_json_output(array('card_holder'=>$credit_data['card_holder'],'exp_date'=>$exp_date,'country'=>$credit_data['country'],'state'=>$credit_data['state'],'zip_code'=>$credit_data['zip_code'],'phone1'=>$phone1,'phone2'=>$phone2,'phone3'=>$phone3,'phone4'=>$phone4));
+  else:
+	drupal_json_output('You fool');
+  endif;
+ 
+ 
+}

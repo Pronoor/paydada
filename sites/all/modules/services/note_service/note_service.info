@@ -1,0 +1,6 @@
+name = Note Service
+description = Services for the Note content type.
+package = Note example
+dependencies[] = services
+files[] = note_service.module
+core = 7.x

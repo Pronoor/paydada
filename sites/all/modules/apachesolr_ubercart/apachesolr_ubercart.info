@@ -1,0 +1,21 @@
+name = ApacheSolr Ubercart integration
+description = Integrates the ApacheSolr and Ubercart
+package = Apache Solr
+core = 7.x
+
+dependencies[]=apachesolr_search
+dependencies[]=uc_cart
+
+files[]=apachesolr_ubercart.module
+files[]=apachesolr_ubercart.views.inc
+files[]=handlers/apachesolr_ubercart_handler_field_addtocart.inc
+files[]=handlers/apachesolr_ubercart_handler_field_solr_image.inc
+files[]=handlers/apachesolr_ubercart_handler_field_money_amount.inc
+
+
+; Information added by drupal.org packaging script on 2013-09-30
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "apachesolr_ubercart"
+datestamp = "1380554134"
+

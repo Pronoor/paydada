@@ -1,0 +1,30 @@
+<?php
+// $Id$
+/**
+ * @file
+ * Qty readonly module
+ *
+ * If enabled the field "Qty" in cart will be readonly.
+ */
+
+
+/**
+ * Implementation of hook_form_alter().
+ * 
+ */
+
+
+function cart_qty_field_readonly_form_alter(&$form, &$form_state, $form_id) {
+
+
+switch($form_id) {
+case 'uc_cart_view_form':            
+  foreach ($form['items'] as $k => $item) {
+    if (is_array($item) && isset($item['qty'])) {
+      //$form['items'][$k]['qty']['#attributes']['disabled'] = "disabled";
+      //$form['items'][$k]['qty']['#attributes']['readonly'] = "readonly";
+    }
+  }
+  break;
+}
+}

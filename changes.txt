@@ -1,0 +1,1 @@
+C:\wamp\www\dhaval\drupal_payment\sites\all\modules\panels\panels_node

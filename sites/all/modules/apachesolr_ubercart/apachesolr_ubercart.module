@@ -1,0 +1,322 @@
+<?php
+
+/**
+ * Implements hook_apachesolr_index_document_build().
+ *
+ * This adds Ubercart specific fields to the Solr index.
+ */
+ 
+function apachesolr_ubercart_apachesolr_index_document_build(ApacheSolrDocument $document, $entity, $env_id) { 
+  
+  if (in_array($entity->type, uc_product_types())) {
+     
+    if (!empty($entity->model)) {
+      $document->ss_uc_sku = $entity->model;
+    }
+    if (!empty($entity->weight)) {
+      $document->fss_uc_weight = $entity->weight;
+    }
+    if (!empty($entity->length)) {
+      $document->fss_uc_length = $entity->length;
+    }
+    if (!empty($entity->width)) {
+      $document->fss_uc_width = $entity->width;
+    }
+    if (!empty($entity->height)) {
+      $document->fss_uc_height = $entity->height;
+    }
+    if (!empty($entity->ordering)) {
+       $document->fss_uc_position = $entity->ordering;
+    }
+    if (!empty($entity->uc_product_image)) {
+      foreach ($entity->uc_product_image['und'] as $image_lang) {
+        $document->setMultiValue('sm_uc_product_image', $image_lang['filename']);
+      }
+    }
+    
+    //index also how many times a product has been sold
+    $stat = db_query('SELECT SUM(qty) FROM {uc_order_products} WHERE nid = :nid', array( ':nid' => $entity->nid))->fetchField();
+    //to prevent Apache Solr Errors while indexing empty values
+    if (empty($stat)) {
+      $stat = 0;
+    }
+    $document->fss_common_num_sold = $stat;
+
+    //attributes
+    if (!empty($entity->attributes)) {
+      foreach ($entity->attributes as $attribute) {
+        $solr_index_name ="sm_uc_attribute_" . $attribute->aid;
+        foreach ($attribute->options as $options) {
+          //we could choose to use oid or to use string
+          //for max maintainabilityand "hookability" we go for oid
+          //we will use theming functions to output decent names
+          $document->setMultiValue($solr_index_name, $options->name);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implementation of hook_facetapi_facet_info().
+ */
+
+function apachesolr_ubercart_facetapi_facet_info($searcher_info) {
+  $facets = array();
+  $facets['ss_uc_sku'] = array(
+    'label' => t('Model'),
+    'description' => t('Apache Solr Search: Filter by Model)'),
+    'field' => 'ss_uc_sku',
+    'field alias' => 'ss_uc_sku',
+  );
+  $facets['fss_uc_weight'] = array(
+    'label' => t('Weight'), 
+    'description' => t('Apache Solr Search: Filter by weight'),
+    'field' => 'fss_uc_weight',
+    'field alias' => 'fss_uc_weight',
+  );
+  $facets['fss_uc_length'] = array(
+    'label' => t('Length'), 
+    'description' => t('Apache Solr Search: Filter by length'),
+    'field' => 'fss_uc_length',
+    'field alias' => 'fss_uc_length',
+  );
+  $facets['fss_uc_width'] = array(
+    'label' => t('Width'), 
+    'description' => t('Apache Solr Search: Filter by width'),
+    'field' => 'fss_uc_width',
+    'field alias' => 'fss_uc_width',
+  );
+  $facets['fss_uc_height'] = array(
+    'label' => t('Height'),
+    'description' => t('Apache Solr Search: Filter by height'),
+    'field' => 'fss_uc_height',
+    'field alias' => 'fss_uc_height',
+  );
+
+  if (module_exists('uc_attribute')) {
+    $types = uc_product_types();
+    foreach ($types as $type_id => $type) {
+      $attributes = apachesolr_ubercart_uc_get_attributes();
+
+      foreach ($attributes as $attribute) {
+        $solr_index_name ="sm_uc_attribute_" . $attribute->aid;
+        $facets[$solr_index_name] = array(
+          'label' => t($attribute->name),
+          'description' => t('Apache Solr Search: Filter by attribute @attribute', array('@attribute' => $attribute->name)),
+          'field' => $solr_index_name,
+          'field alias' => $solr_index_name,
+        );
+      }
+    }
+  }
+  return $facets;
+}
+
+/**
+ * Implements hook_apachesolr_query_prepare()
+ */
+ 
+function apachesolr_ubercart_apachesolr_query_prepare(&$query) {
+  
+  $query->setAvailableSort('fss_sell_price', array(
+    'title' => t('Sell Price'),
+    'default' => 'asc',
+  ));
+  
+  $query->addParam('fl', 'ss_uc_sku');
+  $query->addParam('fl', 'sm_uc_product_image');
+  
+  $query->setAvailableSort('fss_list_price', array(
+    'title' => t('List Price'),
+    'default' => 'asc',
+  ));
+  $query->setAvailableSort('fss_common_num_sold', array(
+    'title' => t('Sold times'),
+    'default' => 'asc',
+  ));
+  $query->setAvailableSort('fss_uc_weight', array(
+    'title' => t('Weight'),
+    'default' => 'asc',
+  ));
+  $query->setAvailableSort('fss_uc_width', array(
+    'title' => t('Width'),
+    'default' => 'asc',
+  ));
+  $query->setAvailableSort('fss_uc_height', array(
+    'title' => t('Height'),
+    'default' => 'asc',
+  ));
+  $query->setAvailableSort('fss_uc_position', array(
+    'title' => t('Position'),
+    'default' => 'asc',
+  ));
+}
+
+/**
+ * Implementation of hook_ca_predicate().
+ * Definition of our statistics updater
+ */
+/* 
+function apachesolr_ubercart_ca_predicate() {
+  $predicates = array();
+
+  $predicates['apachesolr_ubercart_update_stats'] = array(
+    '#title' => t('Update statistics'),
+    '#description' => t('Update the statistics for the most sold in Solr by changing the products date.'),
+    '#class' => 'apachesolr_ubercart',
+    '#status' => 1,
+    '#trigger' => 'uc_checkout_complete',
+    '#actions' => array(
+      array(
+        '#name' => 'apachesolr_ubercart_set_stats_in_node',
+        '#title' => t('Update the changed date in the node'),
+        '#argument_map' => array(
+          'order' => 'order',
+        ),
+      ),
+    ),
+  );
+  return $predicates;
+}
+*/
+
+/*
+ *  Implement hook_apachesolr_field_mappings
+ */
+function apachesolr_ubercart_apachesolr_field_mappings() {
+  $mappings['per-field']['sell_price'] = array(
+    'name' => 'sell_price',
+    'indexing_callback' => 'apachesolr_ubercart_fields_indexing_callback', 
+    'index_type' => 'sfloat',
+    'query types' => array('term', 'numeric_range'),
+    'query type' => 'term', 
+    'facets' => TRUE,
+    'multiple' => FALSE
+  );
+  $mappings['per-field']['list_price'] = array(
+    'name' => 'list_price',
+    'indexing_callback' => 'apachesolr_ubercart_fields_indexing_callback', 
+    'index_type' => 'sfloat',
+    'query types' => array('term', 'numeric_range'),
+    'query type' => 'term', 
+    'facets' => TRUE,
+    'multiple' => FALSE
+  );
+  return $mappings;
+}
+
+/**
+* Takes the values from the field and tells the module where to put them
+*
+* @param object $entity
+*   An object containing the entity that will get indexed.
+* @param string $field_name
+*   A string containing the name of the location field.
+* @param string $index_key
+*   A string containing the solr index field name.
+* @param array $field_info
+*   Array.
+*
+* @return array
+*   An array containing all the fields that needs to be indexed.
+*/
+function apachesolr_ubercart_fields_indexing_callback($entity, $field_name, $index_key, $field_info) {
+  $fields = array();
+  if (!empty($entity->{$field_name})) {
+    // Sell Price.    
+    $field = array('index_type' => 'sfloat', 'name' => $field_name,'multiple' => FALSE);
+    $field_index_key = apachesolr_index_key($field);
+    $fields[] = array(
+      'key' => $field_index_key,
+      'value' => (float)uc_store_format_price_field_value($entity->{$field_name}),
+    );
+  }
+  
+  return $fields;
+}
+ 
+/*
+ *  Return an array of the uc defined attributes
+ */
+function apachesolr_ubercart_uc_get_attributes() {
+  $attributes = array();
+  $result = db_query("SELECT ua.aid FROM {uc_attributes} AS ua ORDER BY ua.ordering, ua.name");
+  foreach ($result as $attribute) {
+    $attributes[$attribute->aid] = uc_attribute_load($attribute->aid, NULL, 'class');
+  }
+  return $attributes;
+}
+
+function apachesolr_ubercart_attribute_to_name($facet, $options) {
+  $option = uc_attribute_option_load($facet);
+  return $option->name;
+}
+
+/**
+ * Implementation of hook_views_api().
+ */
+
+function apachesolr_ubercart_views_api() {
+  return array('api' => '3.0-dev');
+}
+
+
+/**
+ * Implementation of hook_apachesolr_theme_breadcrumb_alter().
+ */
+ 
+function apachesolr_ubercart_apachesolr_theme_breadcrumb_alter(&$fieldname) {
+  switch ($fieldname) {
+    case 'apachesolr_breadcrumb_fss_list_price':
+    case 'apachesolr_breadcrumb_fss_sell_price':
+      $fieldname = 'apachesolr_ubercart_breadcrumb_uc_price';
+      break;
+  }
+  if (strpos($fieldname, '_sm_uc_attribute_')) {
+    $fieldname = 'apachesolr_ubercart_breadcrumb_uc_attribute_option';
+  }
+}
+
+
+/**
+ * Implementation of hook_theme().
+ */
+ 
+function apachesolr_ubercart_theme() {
+  return array(
+    'apachesolr_ubercart_breadcrumb_uc_attribute_option' => array(
+      'arguments' => array('field' => NULL),
+    ),
+    'apachesolr_ubercart_breadcrumb_uc_price' => array(
+      'arguments' => array('field' => NULL),
+    ),
+  );
+}
+
+/**
+ * Return the human readable value of an attribute option.
+ */
+ 
+function theme_apachesolr_ubercart_breadcrumb_uc_attribute_option($field) {
+  return apachesolr_ubercart_attribute_to_name($field['#value'], NULL);
+}
+
+/**
+ * Return the human readable value of a price range.
+ */
+ 
+function theme_apachesolr_ubercart_breadcrumb_uc_price($field) {
+  $context = array('revision' => 'formatted', 'type' => 'product');
+  return t('from @price_from to @price_to',
+    array(
+      '@price_from' => uc_store_format_price_field_value($field['#start']),
+      '@price_to' => uc_store_format_price_field_value($field['#end'])
+    )
+  );
+}
+
+
+
+
+
